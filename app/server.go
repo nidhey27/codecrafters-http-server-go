@@ -7,6 +7,25 @@ import (
 	"strings"
 )
 
+type Request struct {
+	Method  string
+	Path    string
+	Headers map[string]string
+}
+
+func parseRequest(request string) Request {
+	lines := strings.Split(request, "\r\n")
+	startLine := lines[0]
+	components := strings.Split(startLine, " ")
+	method := components[0]
+	path := components[1]
+	return Request{
+		Method:  method,
+		Path:    path,
+		Headers: make(map[string]string),
+	}
+}
+
 func main() {
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
@@ -48,23 +67,4 @@ func main() {
 	}
 
 	defer conn.Close()
-}
-
-type Request struct {
-	Method  string
-	Path    string
-	Headers map[string]string
-}
-
-func parseRequest(request string) Request {
-	lines := strings.Split(request, "\r\n")
-	startLine := lines[0]
-	components := strings.Split(startLine, " ")
-	method := components[0]
-	path := components[1]
-	return Request{
-		Method:  method,
-		Path:    path,
-		Headers: make(map[string]string),
-	}
 }
