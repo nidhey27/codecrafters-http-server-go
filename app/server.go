@@ -50,10 +50,13 @@ func handleConnection(conn net.Conn) {
 	r := parseRequest(request)
 
 	var response string
-	responseBody := "ABC"
 	if r.Path == "/" {
 		response = HTTPStatusOK
-		response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(responseBody), responseBody)
+	} else if strings.Contains(r.Path, "/echo/") {
+		response = HTTPStatusOK
+		index := strings.Index(r.Path, "echo/")
+		content := r.Path[index+len("echo/"):]
+		response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(content), content)
 	} else {
 		response = HTTPStatusNotFound
 	}
