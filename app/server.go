@@ -50,7 +50,7 @@ func handleConnection(conn net.Conn) {
 	r := parseRequest(request)
 
 	var response string
-	responseBody := "abc"
+	responseBody := "ABC"
 	if r.Path == "/" {
 		response = HTTPStatusOK
 		response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(responseBody), responseBody)
