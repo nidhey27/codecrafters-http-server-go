@@ -104,7 +104,7 @@ func main() {
 			log.Println("Error accepting connection:", err)
 			continue
 		}
-
+		// For each accepted connection, launch a goroutine to handle it.
 		go handleConnection(conn)
 	}
 }
