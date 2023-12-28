@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
-	"os"
 	"strings"
 )
 
@@ -12,6 +12,13 @@ type Request struct {
 	Path    string
 	Headers map[string]string
 }
+
+const (
+	HTTPStatusOK         = "HTTP/1.1 200 OK\r\n\r\n"
+	HTTPStatusNotFound   = "HTTP/1.1 404 Not Found\r\n\r\n"
+	BufferSize           = 8192
+	DefaultListenAddress = "0.0.0.0:4221"
+)
 
 func parseRequest(request string) Request {
 	lines := strings.Split(request, "\r\n")
@@ -26,45 +33,54 @@ func parseRequest(request string) Request {
 	}
 }
 
-func main() {
-	l, err := net.Listen("tcp", "0.0.0.0:4221")
-	if err != nil {
-		fmt.Println("Failed to bind to port 4221")
-		os.Exit(1)
-	}
+func handleConnection(conn net.Conn) {
+	defer conn.Close()
 
-	fmt.Println("TCP server started at 0.0.0.0:4221")
-
-	conn, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
-	}
-
-	buffer := make([]byte, 8192)
+	buffer := make([]byte, BufferSize)
 	length, err := conn.Read(buffer)
-
 	if err != nil {
-		fmt.Println("Error reading: ", err.Error())
-		os.Exit(1)
-		os.Exit(1)
+		log.Println("Error reading:", err)
+		return
 	}
 
 	request := string(buffer[:length])
 	fmt.Println("Received request:")
 	fmt.Println(request)
+
 	r := parseRequest(request)
+
 	var response string
+	responseBody := "abc"
 	if r.Path == "/" {
-		response = "HTTP/1.1 200 OK\r\n\r\n"
+		response = HTTPStatusOK
+		response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(responseBody), responseBody)
 	} else {
-		response = "HTTP/1.1 404 Not Found\r\n\r\n"
+		response = HTTPStatusNotFound
 	}
 
 	_, err = conn.Write([]byte(response))
 	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
+		log.Println("Error writing response:", err)
+	}
+}
+
+func main() {
+	l, err := net.Listen("tcp", DefaultListenAddress)
+	if err != nil {
+		log.Fatal("Failed to bind to port 4221:", err)
 	}
 
-	defer conn.Close()
+	defer l.Close()
+
+	fmt.Println("TCP server started at", DefaultListenAddress)
+
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			log.Println("Error accepting connection:", err)
+			continue
+		}
+
+		go handleConnection(conn)
+	}
 }
