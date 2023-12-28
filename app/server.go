@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"net"
@@ -57,6 +58,10 @@ func handleConnection(conn net.Conn) {
 		index := strings.Index(r.Path, "echo/")
 		content := r.Path[index+len("echo/"):]
 		response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(content), content)
+	} else if strings.Contains(r.Path, "/user-agent") {
+		response = HTTPStatusOK
+		content, _ := extractUserAgent(request)
+		response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(content), content)
 	} else {
 		response = HTTPStatusNotFound
 	}
@@ -65,6 +70,22 @@ func handleConnection(conn net.Conn) {
 	if err != nil {
 		log.Println("Error writing response:", err)
 	}
+}
+
+func extractUserAgent(request string) (string, error) {
+	// Split the request string into lines
+	scanner := bufio.NewScanner(strings.NewReader(request))
+	for scanner.Scan() {
+		line := scanner.Text()
+		// Check if the line starts with "User-Agent:"
+		if strings.HasPrefix(line, "User-Agent:") {
+			// Extract the User-Agent value
+			return strings.TrimSpace(strings.TrimPrefix(line, "User-Agent:")), nil
+		}
+	}
+
+	// If User-Agent is not found
+	return "", fmt.Errorf("User-Agent not found in the request")
 }
 
 func main() {
