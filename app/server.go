@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"strings"
 )
@@ -13,11 +15,13 @@ import (
 type Request struct {
 	Method  string
 	Path    string
+	Body    string
 	Headers map[string]string
 }
 
 const (
 	HTTPStatusOK         = "HTTP/1.1 200 OK\r\n\r\n"
+	HTTPStatusCreated    = "HTTP/1.1 201 Created\r\n\r\n"
 	HTTPStatusNotFound   = "HTTP/1.1 404 Not Found\r\n\r\n"
 	BufferSize           = 8192
 	DefaultListenAddress = "0.0.0.0:4221"
@@ -25,14 +29,38 @@ const (
 
 func parseRequest(request string) Request {
 	lines := strings.Split(request, "\r\n")
+
+	// Parse the start line
 	startLine := lines[0]
 	components := strings.Split(startLine, " ")
 	method := components[0]
 	path := components[1]
+
+	// Parse headers
+	headers := make(map[string]string)
+	var bodyStartIndex int
+	for i := 1; i < len(lines); i++ {
+		line := lines[i]
+		if line == "" {
+			// Empty line indicates the end of headers, and the next line is the body
+			bodyStartIndex = i + 1
+			break
+		}
+		headerComponents := strings.SplitN(line, ": ", 2)
+		if len(headerComponents) == 2 {
+			// Handle multiline headers
+			headers[headerComponents[0]] += headerComponents[1]
+		}
+	}
+
+	// Parse the body
+	body := strings.Join(lines[bodyStartIndex:], "\r\n")
+
 	return Request{
 		Method:  method,
 		Path:    path,
-		Headers: make(map[string]string),
+		Headers: headers,
+		Body:    body,
 	}
 }
 
@@ -64,7 +92,7 @@ func handleConnection(conn net.Conn, directory string) {
 		response = HTTPStatusOK
 		content, _ := extractUserAgent(request)
 		response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(content), content)
-	} else if strings.Contains(r.Path, "/files") {
+	} else if r.Method == http.MethodGet && strings.Contains(r.Path, "/files") {
 		index := strings.Index(r.Path, "files/")
 		fileName := r.Path[index+len("files/"):]
 
@@ -77,6 +105,28 @@ func handleConnection(conn net.Conn, directory string) {
 		}
 	} else {
 		response = HTTPStatusNotFound
+	}
+
+	if r.Method == http.MethodPost {
+		// Handle POST request
+		body, err := ioutil.ReadAll(strings.NewReader(r.Body))
+		index := strings.Index(r.Path, "files/")
+		fileName := r.Path[index+len("files/"):]
+		if err != nil {
+			// Handle the error
+			response = HTTPStatusNotFound
+		} else {
+			response = HTTPStatusCreated
+			file, err := os.Create(directory + fileName)
+			if err != nil {
+				fmt.Println(err)
+			}
+			_, err = file.Write(body)
+			if err != nil {
+				fmt.Println(err)
+			}
+			defer file.Close()
+		}
 	}
 
 	_, err = conn.Write([]byte(response))
