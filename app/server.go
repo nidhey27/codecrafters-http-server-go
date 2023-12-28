@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"strings"
 )
 
@@ -34,7 +36,7 @@ func parseRequest(request string) Request {
 	}
 }
 
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn, directory string) {
 	defer conn.Close()
 
 	buffer := make([]byte, BufferSize)
@@ -62,6 +64,17 @@ func handleConnection(conn net.Conn) {
 		response = HTTPStatusOK
 		content, _ := extractUserAgent(request)
 		response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(content), content)
+	} else if strings.Contains(r.Path, "/files") {
+		index := strings.Index(r.Path, "files/")
+		fileName := r.Path[index+len("files/"):]
+
+		data, err := readFileIfExists(directory, fileName)
+		if err != nil {
+			response = HTTPStatusNotFound
+		} else {
+			response = HTTPStatusOK
+			response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n%s", len(data), data)
+		}
 	} else {
 		response = HTTPStatusNotFound
 	}
@@ -88,7 +101,33 @@ func extractUserAgent(request string) (string, error) {
 	return "", fmt.Errorf("User-Agent not found in the request")
 }
 
+func readFileIfExists(directory, filename string) ([]byte, error) {
+	// Construct the file path
+	filePath := fmt.Sprintf("%s/%s", directory, filename)
+
+	// Check if the file exists
+	_, err := os.Stat(filePath)
+	if os.IsNotExist(err) {
+		// File does not exist
+		return nil, fmt.Errorf("File %s not found in directory %s", filename, directory)
+	} else if err != nil {
+		// Other error occurred
+		return nil, err
+	}
+
+	// Read the file data
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
 func main() {
+	var dirFlag = flag.String("directory", ".", "directory to serve files from")
+	flag.Parse()
+
 	l, err := net.Listen("tcp", DefaultListenAddress)
 	if err != nil {
 		log.Fatal("Failed to bind to port 4221:", err)
@@ -105,6 +144,6 @@ func main() {
 			continue
 		}
 		// For each accepted connection, launch a goroutine to handle it.
-		go handleConnection(conn)
+		go handleConnection(conn, *dirFlag)
 	}
 }
